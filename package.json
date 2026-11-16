@@ -1,0 +1,12 @@
+{
+  "name": "a320neo-3d-claude",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "空客 A320neo 3D 部件原理演示（three.js，零构建、零 npm 依赖）",
+  "scripts": {
+    "start": "node serve.mjs",
+    "test": "node --test tests/specs.test.mjs"
+  },
+  "license": "MIT"
+}

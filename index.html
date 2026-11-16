@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>空客 A320neo · 3D 部件原理演示</title>
+<meta name="description" content="可交互的空客 A320neo 三维演示：机翼、襟缝翼、扰流板、尾翼、LEAP-1A 发动机、起落架、液压、燃油、电源、空调等 21 个部件的工作原理。">
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="view" aria-label="A320neo 三维模型"></canvas>
+<svg id="leaders" aria-hidden="true"></svg>
+<div id="callouts" aria-hidden="true"></div>
+
+<header id="top">
+  <div class="brand">
+    <b>A320<i>neo</i></b>
+    <span>3D 部件原理演示</span>
+  </div>
+  <nav id="phases" aria-label="飞行阶段"></nav>
+  <div class="tools">
+    <button id="btnXray" class="tg" title="让蒙皮半透明，露出内部结构和管路（X）">透视</button>
+    <button id="btnLabels" class="tg on" title="显示 / 隐藏部件标注（L）">标注</button>
+    <button id="btnTour" title="按顺序逐个讲解（T）">导览</button>
+    <button id="btnHome" title="回到总览视角（H）">复位</button>
+  </div>
+</header>
+
+<div id="phaseNote" class="glass"></div>
+
+<aside id="list" class="glass" aria-label="部件列表">
+  <div class="scroll" id="parts"></div>
+</aside>
+
+<aside id="info" class="glass" aria-label="部件说明">
+  <div class="scroll" id="infoBody"></div>
+  <div class="pager">
+    <button id="btnPrev">上一个</button>
+    <span id="pageNo"></span>
+    <button id="btnNext" class="primary">下一个</button>
+  </div>
+</aside>
+
+<footer id="console" class="glass" aria-label="操纵台"></footer>
+
+<div class="mobileBar">
+  <button id="mList">部件</button>
+  <button id="mInfo">说明</button>
+  <button id="mCtl">操纵台</button>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+<div id="loading"><div><b>A320<i>neo</i></b><span>正在搭建飞机…</span></div></div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
