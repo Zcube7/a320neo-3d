@@ -8,7 +8,7 @@ export class Orbit {
     this.cam = camera; this.dom = dom;
     this.goal = { t: new THREE.Vector3(0, 3, 0), az: -40 * DEG, el: 14 * DEG, dist: 52 };
     this.cur = { t: this.goal.t.clone(), az: this.goal.az, el: this.goal.el, dist: this.goal.dist };
-    this.minDist = 1.2; this.maxDist = 160; this.floor = 0.25; this.useFloor = true;
+    this.minDist = 1.2; this.maxDist = 220; this.floor = 0.25; this.useFloor = true;
     this.dragged = false; this.onUserMove = null;
     this._ptrs = new Map(); this._pinch = 0;
     dom.addEventListener('pointerdown', (e) => this._down(e));
@@ -22,7 +22,7 @@ export class Orbit {
 
   _down(e) {
     this._ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey });
-    this.dragged = false; this._travel = 0;
+    this._travel = 0; this.dragged = this._ptrs.size > 1;      // 第二根手指落下就算拖动：抬手时不当成点选
     try { this.dom.setPointerCapture(e.pointerId); } catch { /* 合成事件没有活动指针 */ }
   }
   _up(e) { this._ptrs.delete(e.pointerId); this._pinch = 0; }
@@ -32,7 +32,7 @@ export class Orbit {
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     this._travel += Math.abs(dx) + Math.abs(dy);
-    if (this._travel > 5) this.dragged = true;
+    if (this._travel > (e.pointerType === 'touch' ? 12 : 5)) this.dragged = true;      // 手指点一下难免抖几个像素
     if (this._ptrs.size >= 2) {
       const [a, b] = [...this._ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
       if (this._pinch) this.zoom(this._pinch / d);

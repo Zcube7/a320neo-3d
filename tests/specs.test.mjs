@@ -90,6 +90,11 @@ test('讲解内容完整', () => {
     assert.ok(p.how.length >= 3 && p.how.every((t) => t.length > 15), `${p.id}：原理至少三段`);
     assert.ok(p.facts.length >= 4 && p.facts.every((f) => f.length === 2 && f[0] && f[1]), `${p.id}：关键数据`);
     assert.ok(p.view.t.length === 3 && p.view.dist > 2 && p.view.dist < 80 && Math.abs(p.view.el) < 89, `${p.id}：视角`);
+    if (p.viewP) {                                    // 竖屏视角只能覆盖 view 里已有的项，合并后同样要合法
+      const v = { ...p.view, ...p.viewP };
+      assert.ok(Object.keys(p.viewP).every((k) => k in p.view), `${p.id}：viewP 里有 view 没有的项`);
+      assert.ok(v.t.length === 3 && v.t.every(Number.isFinite) && v.dist > 2 && v.dist < 80 && Math.abs(v.el) < 89 && Number.isFinite(v.az), `${p.id}：竖屏视角`);
+    }
     for (const k of p.controls || []) assert.ok(consoleKeys.has(k), `${p.id}：未知操纵台控件 ${k}`);
     for (const k of p.extra || []) assert.ok(extraKeys.has(k), `${p.id}：未知专用控件 ${k}`);
     for (const c of p.callouts || []) {

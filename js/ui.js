@@ -18,7 +18,7 @@ export function initUI(app) {
     if (g !== '总览') $('parts').append(el('h4', '', g));
     for (const p of PARTS.filter((x) => x.group === g)) {
       const b = el('button', '', p.id === 'overview' ? '总览' : p.name);
-      b.onclick = () => { app.select(p.id, { user: true }); closeSheets(); };
+      b.onclick = () => { app.select(p.id, { user: true }); if (cl.contains('sList')) sheet(infoWasOpen ? 'sInfo' : 'sList', infoWasOpen); };
       partBtns[p.id] = b; $('parts').append(b);
     }
   }
@@ -96,11 +96,12 @@ export function initUI(app) {
       const r = pad.getBoundingClientRect(), x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1)), y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
       app.set('roll', x); app.set('pitch', y);             // 向下拖 = 拉杆（抬头）
     };
-    pad.onpointerdown = (e) => { down = true; pad.setPointerCapture(e.pointerId); setFrom(e); };
+    pad.onpointerdown = (e) => { down = true; try { pad.setPointerCapture(e.pointerId); } catch { /* 合成事件没有活动指针 */ } setFrom(e); e.preventDefault(); };
     pad.onpointermove = (e) => { if (down) setFrom(e); };
     pad.onpointerup = pad.onpointercancel = () => { down = false; app.set('roll', 0); app.set('pitch', 0); };
     tickers.push(() => {
-      knob.style.transform = `translate(${S.roll * 26}px, ${S.pitch * 26}px)`;
+      const R = (pad.clientWidth || 74) / 2 - 11;          // 手机上摇杆底座大一圈，行程跟着变
+      knob.style.transform = `translate(${S.roll * R}px, ${S.pitch * R}px)`;
       v.innerHTML = Math.abs(S.roll) + Math.abs(S.pitch) < 0.02 ? '松杆回中' : `${S.roll > 0.02 ? '右' : S.roll < -0.02 ? '左' : ''}${Math.abs(S.roll) > 0.02 ? pct(Math.abs(S.roll)) + '%' : ''} ${S.pitch > 0.02 ? '拉' : S.pitch < -0.02 ? '推' : ''}${Math.abs(S.pitch) > 0.02 ? pct(Math.abs(S.pitch)) + '%' : ''}`;
     });
   }
@@ -109,7 +110,7 @@ export function initUI(app) {
     Object.assign(inp, { type: 'range', min: -100, max: 100, step: 1, value: 0 }); g.insertBefore(inp, v);
     inp.oninput = () => app.set('rudder', +inp.value / 100);
     const back = () => { inp.value = 0; app.set('rudder', 0); };
-    inp.onchange = back; inp.onpointerup = back;
+    inp.onchange = back; inp.onpointerup = back; inp.onpointercancel = back; inp.ontouchend = back;
     tickers.push(() => { if (document.activeElement !== inp && Math.abs(S.rudder * 100 - inp.value) > 1) inp.value = S.rudder * 100; v.textContent = `舵面 ${sgn(app.cur.rud, '右', '左')}`; });
   }
   { // 发动机
@@ -129,18 +130,18 @@ export function initUI(app) {
     tickers.push(() => { const c = flapConfig(S.flap, S.airborne); v.innerHTML = `构型 <em>${c.name}</em> · 缝翼 ${app.cur.slat.toFixed(0)}° · 襟翼 ${app.cur.flap.toFixed(0)}°`; });
   }
   { // 减速板
-    const g = cg('speedbrake', '减速板'), inp = el('input'), gs = el('button', 'tg warn', '地面扰流板'), v = val(g);
+    const g = cg('speedbrake', '减速板'), inp = el('input'), gs = el('button', 'tg warn', '地面扰流板'), pair = el('div', 'pair'), v = val(g);
     Object.assign(inp, { type: 'range', min: 0, max: 100, step: 1, value: 0 });
-    g.insertBefore(inp, v); g.insertBefore(gs, v);
+    pair.append(inp, gs); g.insertBefore(pair, v);
     inp.oninput = () => app.set('speedbrake', +inp.value / 100); gs.onclick = () => app.set('groundSpoilers', !S.groundSpoilers);
     refreshers.push(() => { inp.value = S.speedbrake * 100; gs.classList.toggle('on', S.groundSpoilers); });
     tickers.push(() => { v.textContent = `3 号板 ${Math.max(app.cur.spL[2], app.cur.spR[2]).toFixed(0)}°（上限 ${LIMITS.groundSpoiler}°）`; });
   }
   { // 起落架 + 地面 / 空中
-    const g = cg('gear', '起落架'), b = el('button', 'tg', '收起'), v = val(g);
-    g.insertBefore(b, v); b.onclick = () => app.set('gearUp', !S.gearUp);
+    const g = cg('gear', '起落架'), b = el('button', 'tg', '收起'), pair = el('div', 'pair'), v = val(g);
+    b.onclick = () => app.set('gearUp', !S.gearUp);
     const seg = el('div', 'seg'), bg = el('button', '', '地面'), ba = el('button', '', '空中');
-    seg.append(bg, ba); g.insertBefore(seg, v); g.dataset.k2 = 'airborne';
+    seg.append(bg, ba); pair.append(b, seg); g.insertBefore(pair, v); g.dataset.k2 = 'airborne';
     bg.onclick = () => app.set('airborne', false); ba.onclick = () => app.set('airborne', true);
     refreshers.push(() => { b.classList.toggle('on', S.gearUp); b.textContent = S.gearUp ? '放下' : '收起'; bg.classList.toggle('on', !S.airborne); ba.classList.toggle('on', S.airborne); });
     tickers.push(() => { const q = app.cur.gear; v.textContent = q < 0.01 ? '已放下锁定' : q > 0.99 ? '已收上锁定' : `收放中 ${pct(q)}%`; });
@@ -150,59 +151,115 @@ export function initUI(app) {
   // ---------------- 顶栏按钮、翻页、移动端 ----------------
   $('btnXray').onclick = () => app.set('xray', !S.xray);
   $('btnLabels').onclick = () => app.set('labels', !S.labels);
-  $('btnTour').onclick = () => app.set('tour', !S.tour);
+  const compact = () => app.view.mode === 'port' || app.view.mode === 'land';
+  $('btnTour').onclick = () => { const on = !S.tour; app.set('tour', on); if (on && compact()) sheet('sInfo', true); };   // 手机上导览时顺手把说明展开
   $('btnHome').onclick = () => app.select('overview', { user: true });
   const step = (d) => { const i = PARTS.findIndex((p) => p.id === S.part); app.select(PARTS[(i + d + PARTS.length) % PARTS.length].id, { user: true }); };
-  $('btnPrev').onclick = () => step(-1); $('btnNext').onclick = () => step(1);
-  const sheets = { mList: 'sList', mInfo: 'sInfo', mCtl: 'sCtl' };
-  const closeSheets = () => document.body.classList.remove('sList', 'sCtl');
-  for (const id in sheets) $(id).onclick = () => { const c = sheets[id], on = document.body.classList.contains(c); document.body.classList.remove('sList', 'sInfo', 'sCtl'); if (!on) document.body.classList.add(c); };
+  $('btnPrev').onclick = $('pkPrev').onclick = () => step(-1); $('btnNext').onclick = $('pkNext').onclick = () => step(1);
+
+  // 手机版的三个弹层互斥：部件 / 说明 / 操纵台。开关之后让相机按新的空白区域重新取景。
+  const cl = document.body.classList, SHEETS = ['sList', 'sInfo', 'sCtl'];
+  let infoWasOpen = false;
+  function sheet(name, on) {
+    const was = cl.contains(name);
+    if (on == null) on = !was;
+    if (name === 'sList' && on) infoWasOpen = cl.contains('sInfo');      // 选完部件后回到原来的状态
+    cl.remove(...SHEETS); if (on) cl.add(name);
+    app.relayout();
+    if (on && name === 'sList') { const b = partBtns[S.part], c = $('parts'); c.scrollTop = b.offsetTop - c.offsetTop - (c.clientHeight - b.offsetHeight) / 2; }
+    if (on && name === 'sInfo') $('infoBody').scrollTop = 0;
+    if (on && name === 'sCtl') revealHot();
+  }
+  // 操纵台是横向长条的版式下（屏幕很矮时），把和当前部件有关的那组控件滑到看得见的地方
+  function revealHot() {
+    const g = con.querySelector('.cg.hot');
+    if (g && con.scrollWidth > con.clientWidth + 2) con.scrollLeft = g.offsetLeft - 10;
+  }
+  $('mList').onclick = () => sheet('sList'); $('mInfo').onclick = $('pkT').onclick = () => sheet('sInfo'); $('mCtl').onclick = () => sheet('sCtl');
+  $('view').addEventListener('pointerdown', () => { if (cl.contains('sList')) sheet(infoWasOpen ? 'sInfo' : 'sList', infoWasOpen); });   // 点一下画面就收起部件列表
+  document.addEventListener('gesturestart', (e) => e.preventDefault());   // iOS：不让双指把整个页面放大
   addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 'x') app.set('xray', !S.xray); else if (k === 'l') app.set('labels', !S.labels); else if (k === 't') app.set('tour', !S.tour);
     else if (k === 'h') app.select('overview', { user: true }); else if (k === 'arrowright') step(1); else if (k === 'arrowleft') step(-1);
     else if (k === 'g') app.set('gearUp', !S.gearUp); else if (k === 'f') app.set('flap', (S.flap + (e.shiftKey ? 4 : 1)) % 5);
-    else if (k === 'u') document.body.classList.toggle('clean'); else return;
+    else if (k === 'u') { cl.toggle('clean'); app.relayout(true); } else return;
     e.preventDefault();
   });
 
   // ---------------- 对外接口 ----------------
-  let toastT = 0, lastTick = 0;
+  let toastT = 0, noteT = 0, lastTick = 0, lastPhase = null;
+  const plain = (s) => s.replace(/<[^>]+>/g, '');
   const ui = {
     refresh() {
-      if (shown !== S.part) renderInfo(PART[S.part]);
+      const p = PART[S.part], no = `${PARTS.indexOf(p) + 1} / ${PARTS.length}`, newPart = shown !== S.part;
+      if (newPart) {
+        renderInfo(p);
+        const [b, s1, s2] = $('pkT').children;
+        b.textContent = p.id === 'overview' ? '总览' : p.name; s1.textContent = `${no} · ${plain(p.tagline)}`; s2.textContent = `${no} · ${p.group} · ${p.en}`;
+      }
       for (const id in partBtns) partBtns[id].classList.toggle('on', id === S.part);
       for (const id in phaseBtns) phaseBtns[id].classList.toggle('on', id === S.phase);
-      const ph = PHASES.find((x) => x.id === S.phase);
-      $('phaseNote').textContent = ph && S.phaseNote ? `${ph.name}：${ph.note}` : '';
+      if (lastPhase !== S.phase) {            // 窄屏上阶段条可能要横向滚：把当前阶段滚到中间
+        lastPhase = S.phase;
+        const c = $('phases'), b = phaseBtns[S.phase];
+        if (b && c.scrollWidth > c.clientWidth + 2) c.scrollLeft = b.offsetLeft - c.offsetLeft - (c.clientWidth - b.offsetWidth) / 2;
+      }
+      const ph = PHASES.find((x) => x.id === S.phase), note = ph && S.phaseNote ? `${ph.name}：${ph.note}` : '';
+      if ($('phaseNote').textContent !== note) {
+        $('phaseNote').textContent = note; clearTimeout(noteT);
+        if (note && compact()) noteT = setTimeout(() => { S.phaseNote = false; ui.refresh(); }, 7000);   // 手机上画面小，说明停 7 秒就让开
+      }
       $('btnXray').classList.toggle('on', S.xray); $('btnLabels').classList.toggle('on', S.labels);
       $('btnTour').classList.toggle('on', !!S.tour); $('btnTour').textContent = S.tour ? '停止导览' : '导览';
-      $('pageNo').textContent = `${PARTS.findIndex((p) => p.id === S.part) + 1} / ${PARTS.length}`;
+      $('pageNo').textContent = no;
       const hot = PART[S.part].controls || [];
       for (const k in groups) groups[k].classList.toggle('hot', hot.includes(k) || (k === 'throttle' && hot.includes('reverse')) || (k === 'speedbrake' && hot.includes('groundSpoilers')) || (k === 'gear' && hot.includes('airborne')));
       for (const f of refreshers) f();
+      if (newPart && cl.contains('sCtl')) revealHot();
     },
     // 每帧调用：pts[i] = { x, y, ok }（屏幕像素），与当前部件的 callouts 一一对应
     tick(now, pts) {
       if (now - lastTick > 90) { lastTick = now; for (const f of tickers) f(); }
-      const show = S.labels, W = innerWidth, H = innerHeight, wide = W > 900 && !document.body.classList.contains('clean'), k = W < 900 ? 0.55 : 1;
-      // 标签不许钻到两侧面板和操纵台下面
-      const x0 = wide ? (W > 1180 ? 222 : 194) : 6, x1 = wide ? W - (W > 1180 ? 374 : 334) : W - 6, y0 = wide ? 104 : 60, y1 = wide ? H - 162 : H - 70;
+      // 标签不许钻到面板下面：只在空白区域里摆。竖屏横向窄、纵向宽裕，所以偏移量横向收紧、纵向基本保留。
+      const show = S.labels, f = app.view.free, m = app.view.mode;
+      const kx = m === 'port' ? 0.5 : m === 'land' ? 0.8 : 1, ky = m === 'port' ? 0.9 : m === 'land' ? 0.6 : 1;
+      const cx = (o, x) => Math.max(f.x0 + o.w / 2, Math.min(f.x1 - o.w / 2, x)), cy = (o, y) => Math.max(f.y0 + o.h / 2, Math.min(f.y1 - o.h / 2, y));
+      const live = [];
       coEls.forEach((o, i) => {
         const p = pts[i], vis = show && p && p.ok;
         o.d.style.display = vis ? '' : 'none'; o.ln.style.display = o.dot.style.display = vis ? '' : 'none';
         if (!vis) return;
         if (!o.w) { o.w = o.d.offsetWidth; o.h = o.d.offsetHeight; }
         const off = o.c.o || [50, -50];
-        const lx = Math.max(x0 + o.w / 2, Math.min(x1 - o.w / 2, p.x + off[0] * k)), ly = Math.max(y0, Math.min(y1, p.y + off[1] * k));
-        o.d.style.transform = `translate(${Math.round(lx - o.w / 2)}px, ${Math.round(ly - o.h / 2)}px)`;
-        o.ln.setAttribute('x1', p.x); o.ln.setAttribute('y1', p.y); o.ln.setAttribute('x2', lx); o.ln.setAttribute('y2', ly);
-        o.dot.setAttribute('cx', p.x); o.dot.setAttribute('cy', p.y);
+        o.p = p; o.x = cx(o, p.x + off[0] * kx); o.y = cy(o, p.y + off[1] * ky);
+        live.push(o);
       });
+      // 互相压住的标签先上下推开（屏幕窄的时候很常见）；空白区域太矮、上下推不开时，后几轮改成左右让
+      for (let pass = 0, moved = live.length > 1; pass < 9 && moved; pass++) {
+        moved = false;
+        for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+          const a = live[i], b = live[j], ox = (a.w + b.w) / 2 + 6 - Math.abs(a.x - b.x), oy = (a.h + b.h) / 2 + 4 - Math.abs(a.y - b.y);
+          if (ox <= 0 || oy <= 0) continue;
+          moved = true;
+          if (pass < 6) { const s = a.y < b.y || (a.y === b.y && a.p.y <= b.p.y) ? -1 : 1; a.y = cy(a, a.y + s * oy / 2); b.y = cy(b, b.y - s * oy / 2); }
+          else { const s = a.x < b.x || (a.x === b.x && a.p.x <= b.p.x) ? -1 : 1; a.x = cx(a, a.x + s * ox / 2); b.x = cx(b, b.x - s * ox / 2); }
+        }
+      }
+      for (const o of live) {
+        o.d.style.transform = `translate(${Math.round(o.x - o.w / 2)}px, ${Math.round(o.y - o.h / 2)}px)`;
+        o.ln.setAttribute('x1', o.p.x); o.ln.setAttribute('y1', o.p.y); o.ln.setAttribute('x2', o.x); o.ln.setAttribute('y2', o.y);
+        o.dot.setAttribute('cx', o.p.x); o.dot.setAttribute('cy', o.p.y);
+      }
     },
+    relaid() { for (const o of coEls) o.w = 0; },         // 版式变了，标签字号可能跟着变：下一帧重新量尺寸
     tip(text, x, y) { const t = $('tip'); if (!text) { t.style.opacity = 0; return; } t.textContent = text; t.style.left = x + 14 + 'px'; t.style.top = y + 16 + 'px'; t.style.opacity = 1; },
-    toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3600); },
+    toast(msg) {
+      const t = $('toast'), n = $('phaseNote');
+      t.style.top = compact() && n.textContent ? `${Math.round(n.getBoundingClientRect().bottom + 6)}px` : '';   // 手机上提示在顶部：阶段说明还挂着就排到它下面
+      t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3600);
+    },
     ready() { $('loading').classList.add('hide'); setTimeout(() => $('loading').remove(), 700); },
   };
   return ui;

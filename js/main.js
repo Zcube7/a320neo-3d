@@ -8,6 +8,7 @@ import { buildEngineFlow, buildWingFlow } from './flow.js';
 import { SPEC, flapConfig, mixSurfaces, PHASES } from './specs.js';
 import { PARTS, PART } from './content.js';
 import { initUI } from './ui.js';
+import { layoutMode, freeRect, lowPower } from './layout.js';
 
 const DEG = Math.PI / 180;
 const canvas = document.getElementById('view');
@@ -21,8 +22,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.3, 30000);
 const env = buildEnv(scene, renderer);
 const M = makeMaterials();
-const narrow = matchMedia('(max-width: 900px)').matches;
-const ac = buildAircraft(M, renderer.capabilities.maxTextureSize >= 8192 && !narrow);
+const ac = buildAircraft(M, renderer.capabilities.maxTextureSize >= 8192 && !lowPower());
 scene.add(ac.rig);
 env.sun.target.position.set(0, SPEC.axisH, 0);
 const orbit = new Orbit(camera, canvas);
@@ -94,7 +94,7 @@ app.select = (id, o = {}) => {
   if (p.ground && S.airborne) { S.airborne = false; S.gearUp = false; cur.gear = 0; S.basePitch = 0; }
   if (p.needEngine && !S.engines) { S.engines = true; S.lights.beacon = true; if (S.throttle < 0.3) S.throttle = 0.4; }
   if (id === 'lights') Object.assign(S.lights, { nav: true, beacon: true, strobe: true, landing: true });
-  applyModes(); flyTo(p.view); pulse(id); changed();
+  applyModes(); flyTo(p); pulse(id); changed();
   if (o.jump) orbit.jump();
 };
 
@@ -107,27 +107,65 @@ app.setPhase = (id) => {
   if (!ph.airborne) cur.gear = 0;
   Object.assign(S.lights, { nav: true, beacon: S.engines, strobe: id !== 'park', landing: ['takeoff', 'approach', 'rollout'].includes(id) });
   applyModes(); changed();
-  if (S.part === 'overview') flyTo(PART.overview.view);
+  if (S.part === 'overview') flyTo(PART.overview);
 };
 
 // ---------------- 相机、标注投影 ----------------
 const tmpV = new THREE.Vector3();
 const toWorld = (p) => ac.root.localToWorld(tmpV.set(p[0], p[1], p[2]));
-function flyTo(v) {
-  ac.rig.updateMatrixWorld(true);
-  // 面板占掉了一部分宽度（或竖屏时横向视野很窄），相机相应退远，保证部件完整落在空白区域里
-  const w = innerWidth, h = innerHeight, wide = w > 900 && !document.body.classList.contains('clean');
-  let k = wide ? Math.pow(w / (w - (w > 1180 ? 576 : 508)), 0.85) * (h < 700 ? 1.12 : 1) : Math.max(1, 1.25 / (w / h));
-  orbit.flyTo(toWorld(v.t).clone(), v.az, v.el, v.dist * Math.min(3, k));
+// 取景：面板挡掉一部分画面后，剩下的空白区域（view.free）才是真正能看到飞机的地方。
+//   view.off  把画面中心挪到空白区域中央的像素偏移（平滑过渡，弹层开合时飞机跟着滑过去）
+//   view.k    相机后退的倍数：空白区域越窄 / 越矮，退得越远，保证部件完整落在里面
+const view = { mode: '', free: { x0: 0, y0: 0, x1: 1, y1: 1 }, k: 0, off: new THREE.Vector2(), goal: new THREE.Vector2() };
+app.view = view;
+function viewFactor() {
+  const w = innerWidth, h = innerHeight, f = view.free;
+  if (view.mode === 'wide') return Math.pow(w / (w - (w > 1180 ? 576 : 508)), 0.85) * (h < 700 ? 1.12 : 1);
+  if (view.mode === 'clean') return Math.max(1, 1.25 * h / w);
+  return Math.max(1, 1.25 * h / (f.x1 - f.x0), 0.87 * h / (f.y1 - f.y0));
 }
-function layout() {
-  const w = innerWidth, h = innerHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / h;
-  // 两侧面板和底部操纵台占掉一部分画面：把视图中心挪到剩下的空白区域中央
-  if (w > 900 && !document.body.classList.contains('clean')) { const lw = w > 1180 ? 212 : 184, rw = w > 1180 ? 364 : 324; camera.setViewOffset(w, h, (rw - lw) / 2, 46, w, h); } else camera.clearViewOffset();
+const anchor = new THREE.Vector3(), anchorW = new THREE.Vector3(), anchorD = new THREE.Vector3();
+function flyTo(p) {
+  ac.rig.updateMatrixWorld(true);
+  const v = view.mode === 'port' && p.viewP ? { ...p.view, ...p.viewP } : p.view;      // 竖屏可以另给一个视角
+  anchor.set(v.t[0], v.t[1], v.t[2]); anchorW.copy(toWorld(v.t));
+  orbit.flyTo(anchorW.clone(), v.az, v.el, v.dist * view.k);
+}
+// 空中压杆时飞机会滚转 / 俯仰，翼尖这类离重心远的部件能甩出去好几米：让镜头跟着所看的部件平移，它才不会跑出画面
+function followPart() {
+  ac.rig.updateWorldMatrix(false, false); ac.root.updateWorldMatrix(false, false);
+  anchorD.copy(ac.root.localToWorld(tmpV.copy(anchor))).sub(anchorW);
+  if (anchorD.lengthSq() < 1e-10) return;
+  orbit.goal.t.add(anchorD); orbit.cur.t.add(anchorD); anchorW.add(anchorD);
+}
+function applyOffset() {
+  const w = innerWidth, h = innerHeight, o = view.off;
+  if (Math.abs(o.x) < 0.5 && Math.abs(o.y) < 0.5) camera.clearViewOffset(); else camera.setViewOffset(w, h, o.x, o.y, w, h);
   camera.updateProjectionMatrix();
 }
-addEventListener('resize', layout); layout();
+function slideOffset(dt) {
+  const d2 = view.off.distanceToSquared(view.goal);
+  if (d2 === 0) return;
+  if (d2 < 0.3) view.off.copy(view.goal); else view.off.lerp(view.goal, 1 - Math.exp(-dt * 9));
+  applyOffset();
+}
+function layout(jump) {
+  const w = innerWidth, h = innerHeight, was = view.mode, k0 = view.k;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  view.mode = layoutMode();
+  // 部件列表是点一下就收的临时弹层：它开着的时候画面不跟着挪
+  if (!(k0 && view.mode === was && view.mode !== 'wide' && document.body.classList.contains('sList'))) view.free = freeRect(view.mode);
+  const f = view.free;
+  view.goal.set(w / 2 - (f.x0 + f.x1) / 2, view.mode === 'wide' ? 46 : h / 2 - (f.y0 + f.y1) / 2);
+  view.k = Math.min(3.4, viewFactor());
+  if (k0 && view.mode !== was) flyTo(PART[state.part]);                                // 横竖屏 / 版式切换：按新版式重新取景
+  else if (k0) orbit.goal.dist = Math.min(orbit.maxDist, orbit.goal.dist * view.k / k0);   // 否则只按比例进退，保留用户自己转的角度
+  if (jump || !k0) view.off.copy(view.goal);
+  applyOffset();
+  if (ui) ui.relaid();
+}
+app.relayout = (jump) => layout(jump);
+addEventListener('resize', () => layout(true)); layout(true);
 const callPts = [];
 function projectCallouts() {
   const cs = PART[state.part].callouts || [];
@@ -246,13 +284,14 @@ function step(dt) {
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; time += dt;
-  step(dt); orbit.update(dt);
+  step(dt); followPart(); orbit.update(dt); slideOffset(dt);
   renderer.render(scene, camera);
   ui.tick(now, projectCallouts());
 }
 
 // ---------------- 启动 ----------------
 ui = initUI(app);
+layout(true);                       // 界面元素建好之后再量一次空白区域
 const q = new URLSearchParams(location.search);
 applyModes();
 if (q.get('phase')) app.setPhase(q.get('phase'));
@@ -262,12 +301,12 @@ for (const kv of (q.get('set') || '').split(',').filter(Boolean)) {
   const [k, v] = kv.split(':');
   if (k in state && typeof state[k] !== 'object') app.set(k, typeof state[k] === 'boolean' ? v === '1' || v === 'true' : +v);
 }
-if (q.has('clean')) { document.body.classList.add('clean'); layout(); app.select(state.part, { jump: true }); }
+if (q.has('clean')) { document.body.classList.add('clean'); layout(true); app.select(state.part, { jump: true }); }
 if (q.has('settle')) { for (let i = 0; i < 260; i++) { time += 0.05; step(0.05); } orbit.jump(); }
 renderer.setAnimationLoop(frame);
 setTimeout(() => ui.ready(), 60);
 
 // 调试接口：__app.step(秒) 可在标签页隐藏（rAF 不跑）时手动推进并渲染一帧
-app.step = (sec = 0.016, n = 1) => { for (let i = 0; i < n; i++) { time += sec; step(sec); orbit.update(sec); } renderer.render(scene, camera); ui.tick(performance.now() + Math.random() * 1e3 + 100, projectCallouts()); };
+app.step = (sec = 0.016, n = 1) => { for (let i = 0; i < n; i++) { time += sec; step(sec); followPart(); orbit.update(sec); slideOffset(sec); } renderer.render(scene, camera); ui.tick(performance.now() + Math.random() * 1e3 + 100, projectCallouts()); };
 app.pick = pick;
 window.__app = app;

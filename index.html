@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1118">
 <title>空客 A320neo · 3D 部件原理演示</title>
 <meta name="description" content="可交互的空客 A320neo 三维演示：机翼、襟缝翼、扰流板、尾翼、LEAP-1A 发动机、起落架、液压、燃油、电源、空调等 21 个部件的工作原理。">
 <link rel="stylesheet" href="./css/style.css">
@@ -36,6 +37,12 @@
 </aside>
 
 <aside id="info" class="glass" aria-label="部件说明">
+  <!-- 手机版：收起时只剩这一条（当前部件 + 前后翻页），点中间展开全文 -->
+  <div class="peek">
+    <button id="pkPrev" aria-label="上一个部件">‹</button>
+    <button id="pkT" class="pkT" aria-label="展开或收起说明"><b></b><span class="s1"></span><span class="s2"></span></button>
+    <button id="pkNext" aria-label="下一个部件">›</button>
+  </div>
   <div class="scroll" id="infoBody"></div>
   <div class="pager">
     <button id="btnPrev">上一个</button>
@@ -46,11 +53,11 @@
 
 <footer id="console" class="glass" aria-label="操纵台"></footer>
 
-<div class="mobileBar">
+<nav class="mobileBar" id="mbar" aria-label="面板切换">
   <button id="mList">部件</button>
   <button id="mInfo">说明</button>
   <button id="mCtl">操纵台</button>
-</div>
+</nav>
 
 <div id="tip"></div>
 <div id="toast"></div>

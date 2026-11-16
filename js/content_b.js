@@ -89,7 +89,7 @@ export const PARTS_B = [
   // ===================== 机载系统 =====================
   {
     id: 'hydraulic', group: '机载系统', name: '液压系统', en: 'Hydraulics', xray: true,
-    view: { t: [19, -0.8, 0], az: 24, el: 36, dist: 42 },
+    view: { t: [19, -0.8, 0], az: 24, el: 36, dist: 42 }, viewP: { az: 43, el: 40, dist: 45 },
     tagline: '三套互相独立的 3,000 psi 液压系统，为舵面、襟缝翼、起落架和刹车提供「肌肉」。',
     how: [
       '绿系统由 1 号发动机带动的泵增压，黄系统由 2 号发动机带动，蓝系统由电动泵增压。三套系统的油液互不相通。',
@@ -105,7 +105,7 @@ export const PARTS_B = [
   },
   {
     id: 'fuel', group: '机载系统', name: '燃油系统', en: 'Fuel', xray: true,
-    view: { t: [16.5, -1, 0], az: -14, el: 56, dist: 46 },
+    view: { t: [16.5, -1, 0], az: -14, el: 56, dist: 46 }, viewP: { az: -44 },
     tagline: '油箱就是机翼本身：翼盒内部密封起来直接装油，再加机身中段的中央油箱。',
     how: [
       '每侧机翼分内、外两个油箱，中央翼盒里是中央油箱。标准构型总容量约 2.4 万升（约 19 吨）。',
@@ -119,7 +119,7 @@ export const PARTS_B = [
   },
   {
     id: 'electrical', group: '机载系统', name: '电源系统', en: 'Electrical', xray: true,
-    view: { t: [15, -1, 0], az: -32, el: 30, dist: 46 },
+    view: { t: [15, -1, 0], az: -32, el: 30, dist: 46 }, viewP: { az: -43 },
     tagline: '每台发动机带一台发电机，APU 再带一台，三台里有一台就够全机使用；全没了还有 RAT 和蓄电池。',
     how: [
       '发动机转速随油门变化，电网却需要恒定的 400 Hz。IDG（整体驱动发电机）内部有恒速传动装置，把变化的输入转速变成恒定的输出转速。',
@@ -133,7 +133,7 @@ export const PARTS_B = [
   },
   {
     id: 'aircond', group: '机载系统', name: '空调与增压', en: 'Air conditioning & pressurization', xray: true,
-    view: { t: [15, -0.4, 0], az: -22, el: 13, dist: 38 },
+    view: { t: [15, -0.4, 0], az: -22, el: 13, dist: 38 }, viewP: { az: -42, el: 18, dist: 42 },
     tagline: '万米高空气温约 −55 ℃、气压只有地面的四分之一。空调系统把发动机引出的热空气变成客舱里能呼吸的空气。',
     how: [
       '从发动机压气机引出的「引气」又热又高压（橙色管路）。它先被预冷，再进入机腹里的两个空调组件（PACK）。',
@@ -163,7 +163,7 @@ export const PARTS_B = [
   },
   {
     id: 'lights', group: '机载系统', name: '外部灯光', en: 'Exterior lights',
-    view: { t: [17, 0, 0], az: -36, el: 20, dist: 58 },
+    view: { t: [17, 0, 0], az: -36, el: 20, dist: 58 }, viewP: { az: -42 },
     tagline: '颜色和闪法都有国际统一规定，让别人一眼看出这架飞机的朝向和状态。',
     how: [
       '航行灯：左翼尖红、右翼尖绿、机尾白。夜里看到一架飞机「左红右绿」，说明它正背对着你；「左绿右红」就是迎面飞来。',
